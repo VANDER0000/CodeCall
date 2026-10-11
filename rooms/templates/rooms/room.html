@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Комната CodeCall</title>
+</head>
+<body>
+    <h1>CodeCall</h1>
+
+    <p>Комната: {{ room.room_code }}</p>
+    <p>Создана: {{ room.created_at|date:"d.m.Y H:i" }}</p>
+
+    <hr>
+
+    <h2>Участники</h2>
+
+    <div>
+        <p>Ты — организатор комнаты</p>
+        <p id="connection-status">Второй участник пока не подключён</p>
+    </div>
+
+    <hr>
+
+    <h2>Управление звонком</h2>
+
+    <button id="call-button">Начать звонок</button>
+    <p id="call-status">Ожидание звонка</p>
+
+    <button id="mic-button">Включить микрофон</button>
+    <p id="mic-status" style="color: gray;">
+    Микрофон не подключён
+    </p>
+    
+    <button id="camera-button">Включить камеру</button>
+
+    <div>
+        <h3>Твоя камера</h3>
+        <video
+            id="local-video"
+            autoplay
+            playsinline
+            muted
+            width="320"
+        ></video>
+    </div>
+
+    <div>
+        <h3>Камера собеседника</h3>
+        <video
+            id="remote-video"
+            autoplay
+            playsinline
+            width="320"
+        ></video>
+    </div>
+    <button id="screen-button" disabled>Показать экран</button>
+
+    <p>Управление звонком скоро заработает.</p>
+
+    <button id="copy-button">Скопировать ссылку</button>
+    <a href="/">На главную</a>
+
+    <script>
+
+        const roomCode = window.location.pathname.split("/")[2];
+        const clientId = crypto.randomUUID();
+
+        const signalingSocket = new WebSocket(
+            `ws://${window.location.host}/ws/room/${roomCode}/`
+        );
+
+        signalingSocket.onopen = () => {
+            console.log("CodeCall signaling connected!");
+        };
+
+       
+        signalingSocket.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.sender === clientId) {
+                return;
+            }
+
+            console.log("Signaling message received:", data);
+
+            try {
+                if (data.type === "offer") {
+                    await peerConnection.setRemoteDescription(data.offer);
+                    while (pendingCandidates.length > 0) {
+                        const candidate = pendingCandidates.shift();
+                        await peerConnection.addIceCandidate(candidate);
+                    }
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+
+                                        
+                    signalingSocket.send(JSON.stringify({
+                        type: "answer",
+                        answer: peerConnection.localDescription,
+                        sender: clientId
+                    }));
+
+                } else if (data.type === "answer") {
+                    await peerConnection.setRemoteDescription(data.answer);
+                    while (pendingCandidates.length > 0) {
+                        const candidate = pendingCandidates.shift();
+                        await peerConnection.addIceCandidate(candidate);
+                    }
+
+                
+                } else if (data.type === "ice" && data.candidate) {
+                    if (peerConnection.remoteDescription) {
+                        await peerConnection.addIceCandidate(data.candidate);
+                    } else {
+                        pendingCandidates.push(data.candidate);
+                    }
+                }
+            } catch (error) {
+                console.error("Ошибка обработки WebRTC-сообщения:", error);
+            }
+        };
+
+        signalingSocket.onclose = () => {
+            console.log("CodeCall signaling disconnected.");
+        };
+
+        signalingSocket.onerror = (error) => {
+            console.error("Signaling WebSocket error:", error);
+        };
+
+
+        const pendingCandidates = [];   
+        const peerConnection = new RTCPeerConnection({
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" }
+            ]
+        });
+
+                
+        const callButton = document.getElementById("call-button");
+        const callStatus = document.getElementById("call-status");
+
+        callButton.addEventListener("click", async () => {
+            try {
+                if (signalingSocket.readyState !== WebSocket.OPEN) {
+                    callStatus.textContent = "Подключение к серверу...";
+                    return;
+                }
+                const offer = await peerConnection.createOffer();
+
+                await peerConnection.setLocalDescription(offer);
+
+                signalingSocket.send(JSON.stringify({
+                    type: "offer",
+                    offer: peerConnection.localDescription,
+                    sender: clientId
+                }));
+
+                callStatus.textContent = "Предложение звонка отправлено";
+            } catch (error) {
+                console.error("Ошибка начала звонка:", error);
+                callStatus.textContent = "Не удалось начать звонок";
+            }
+        });
+
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                signalingSocket.send(JSON.stringify({
+                    type: "ice",
+                    candidate: event.candidate,
+                    sender: clientId
+                }));
+            }
+        };
+
+        peerConnection.onconnectionstatechange = () => {
+            console.log(
+                "WebRTC connection state:",
+                peerConnection.connectionState
+            );
+        };
+
+
+        const remoteVideo = document.getElementById("remote-video");
+
+        peerConnection.ontrack = (event) => {
+            remoteVideo.srcObject = event.streams[0];
+            console.log("Получен медиапоток собеседника!");
+        };
+
+        const copyButton = document.getElementById('copy-button');
+
+        copyButton.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(window.location.href);
+                copyButton.textContent = 'Ссылка скопирована!';
+            } catch (error) {
+                alert('Не удалось скопировать ссылку. Скопируй её из адресной строки.');
+            }
+        });
+        const micButton = document.getElementById('mic-button');
+        const micStatus = document.getElementById('mic-status');
+
+        const combinedStream = new MediaStream();
+        
+        function addTracksToPeerConnection(stream) {
+            console.log("Дорожки для отправки:", stream.getTracks());
+            stream.getTracks().forEach(track => {
+                const alreadyAdded = peerConnection
+                    .getSenders()
+                    .some(sender => sender.track === track);
+
+                if (!alreadyAdded) {
+                    peerConnection.addTrack(track, combinedStream);
+                    console.log("Дорожка добавлена:", track.kind);
+                }
+            });
+        }
+
+        let localStream = null;
+
+        micButton.addEventListener('click', async () => {
+            try {
+                if (localStream === null) {
+                    
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: true
+                    });
+
+                    localStream.getAudioTracks().forEach(track => {
+                        combinedStream.addTrack(track);
+                    });
+
+                    addTracksToPeerConnection(localStream);
+
+                    micButton.textContent = 'Выключить микрофон';
+                    console.log('Микрофон подключён');
+                    micStatus.textContent = 'Микрофон включён';
+                    micStatus.style.color = 'green';
+                } else {
+                    const audioTrack = localStream.getAudioTracks()[0];
+
+                    audioTrack.enabled = !audioTrack.enabled;
+                    micStatus.textContent = audioTrack.enabled
+                        ? 'Микрофон включён' 
+                        : 'Микрофон выключен';
+                    micStatus.style.color = audioTrack.enabled
+                        ? 'green'
+                        : 'black';
+
+                    micButton.textContent = audioTrack.enabled
+                        ? 'Выключить микрофон'
+                        : 'Включить микрофон';
+                    
+                }
+            } catch (error) {
+                console.error('Ошибка доступа к микрофону:', error);
+                micStatus.textContent = 'Не удалось подключить микрофон';
+                micStatus.style.color = 'red';
+                alert('Не удалось получить доступ к микрофону. Проверь разрешения браузера.');
+            }
+            console.log(
+                combinedStream.getTracks().map(track => ({
+                    kind: track.kind,
+                    enabled: track.enabled,
+                    readyState: track.readyState
+                }))
+            );
+        });
+
+        const cameraButton = document.getElementById('camera-button');
+        const localVideo = document.getElementById('local-video');
+
+        let cameraStream = null;
+
+        
+        cameraButton.addEventListener('click', async () => {
+            try {
+                if (cameraStream === null) {
+                    
+                    cameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: true
+                    });
+
+                    cameraStream.getVideoTracks().forEach(track => {
+                        combinedStream.addTrack(track);
+                    });
+                    
+                    addTracksToPeerConnection(cameraStream);
+
+                    localVideo.srcObject = combinedStream;
+                    cameraButton.textContent = 'Выключить камеру';
+                } else {
+                    
+                    cameraStream.getVideoTracks().forEach(track => {
+                        combinedStream.removeTrack(track);
+                        track.stop();
+                    });
+
+                    cameraStream = null;
+                    localVideo.srcObject = combinedStream;
+                    cameraButton.textContent = 'Включить камеру';
+                }
+            } catch (error) {
+                console.error('Ошибка доступа к камере:', error);
+                alert('Не удалось получить доступ к камере. Проверь разрешения браузера.');
+            }
+            console.log(
+                combinedStream.getTracks().map(track => ({
+                    kind: track.kind,
+                    enabled: track.enabled,
+                    readyState: track.readyState
+                }))
+            );
+        });
+
+        
+    </script>
+</body>
+</html>
+

@@ -66,8 +66,10 @@
         const roomCode = window.location.pathname.split("/")[2];
         const clientId = crypto.randomUUID();
 
+        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+
         const signalingSocket = new WebSocket(
-            `ws://${window.location.host}/ws/room/${roomCode}/`
+            `${wsProtocol}//${window.location.host}/ws/room/${roomCode}/`
         );
 
         signalingSocket.onopen = () => {

@@ -2,346 +2,197 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Комната CodeCall</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0c0e13">
+    <title>CodeCall — видеозвонок</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root{color-scheme:dark;--page:#0c0e13;--surface:#151820;--surface-light:#20242e;--border:rgba(255,255,255,.08);--muted:#9299a8;--accent:#9aa8ff;--accent-hover:#b1bcff;--text:#f4f5f9}
+        *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -20%,rgba(123,139,255,.10),transparent 55%),var(--page);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+        button,a{-webkit-tap-highlight-color:transparent}.app-shell{width:min(1400px,100%);margin:0 auto;padding:24px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:22px;border-bottom:1px solid var(--border)}
+        .brand{display:flex;align-items:center;gap:11px;font-size:1.25rem;font-weight:750;letter-spacing:-.04em}.brand-mark{display:grid;place-items:center;width:42px;height:42px;flex:0 0 auto;border-radius:14px;color:#111522;background:var(--accent);font-size:1.2rem;box-shadow:0 8px 28px rgba(139,156,255,.15)}
+        .eyebrow{color:var(--muted);font-size:.73rem;text-transform:uppercase;letter-spacing:.12em;font-weight:700}.room-code{font-size:1.05rem;font-weight:650;letter-spacing:.06em;overflow-wrap:anywhere}.subtle{color:var(--muted)}
+        .status-pill{display:inline-flex;align-items:center;gap:9px;max-width:100%;padding:9px 13px;background:rgba(21,24,32,.9);border:1px solid var(--border);border-radius:999px;font-size:.82rem;color:#d8dbe5}.status-dot{width:8px;height:8px;flex:0 0 auto;border-radius:50%;background:#9a9eaa;box-shadow:0 0 0 4px rgba(154,158,170,.10)}
+        .section-heading{font-size:.98rem;font-weight:650;letter-spacing:-.02em}.video-card{position:relative;overflow:hidden;min-height:260px;aspect-ratio:16/10;background:#191c25;border:1px solid var(--border);border-radius:20px;isolation:isolate}
+        .video-card video{position:absolute;z-index:1;inset:0;width:100%;height:100%;object-fit:cover;background:#191c25}#local-video{transform:scaleX(-1)}
+        .video-label{position:absolute;z-index:3;bottom:14px;left:14px;display:inline-flex;align-items:center;gap:5px;padding:8px 11px;background:rgba(10,12,18,.72);border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:.82rem;backdrop-filter:blur(12px)}
+        .video-placeholder{position:absolute;z-index:2;inset:0;display:grid;place-content:center;justify-items:center;gap:12px;padding:20px;color:var(--muted);text-align:center;pointer-events:none;background:#191c25}.video-placeholder.is-hidden{display:none}.placeholder-icon{display:grid;place-items:center;width:68px;height:68px;border-radius:50%;background:var(--surface-light);color:#c2c9ff;font-size:1.7rem}
+        .control-panel{height:100%;padding:21px;background:rgba(21,24,32,.92);border:1px solid var(--border);border-radius:20px;box-shadow:0 14px 45px rgba(0,0,0,.08)}
+        .control-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:46px;padding:11px 16px;color:#f3f4f8;background:var(--surface-light);border:1px solid var(--border);border-radius:13px;font-weight:550;transition:background .18s ease,border-color .18s ease,transform .18s ease}
+        .control-btn:hover:not(:disabled){color:white;background:#2b3040;border-color:rgba(255,255,255,.16)}.control-btn:active:not(:disabled){transform:scale(.98)}.control-btn.primary{color:#111522;background:var(--accent);border-color:transparent}.control-btn.primary:hover:not(:disabled){color:#111522;background:var(--accent-hover)}.control-btn:disabled{opacity:.45;cursor:not-allowed}
+        .status-box{min-height:44px;padding:12px 14px;background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:12px;color:#c5cad6;font-size:.88rem;overflow-wrap:anywhere}.action-link{color:#b6c0ff;text-decoration:none;transition:color .18s ease}.action-link:hover{color:white}
+        .invite-note{padding:12px 13px;background:rgba(154,168,255,.06);border:1px solid rgba(154,168,255,.12);border-radius:12px;color:#c9cfff;font-size:.82rem}footer{border-top:1px solid var(--border)}
+        @media(max-width:767px){.app-shell{padding:16px}.topbar{align-items:flex-start}.topbar-meta{text-align:right}.video-card{min-height:220px;aspect-ratio:4/3;border-radius:16px}.control-panel{padding:16px}.control-btn{flex:1 1 calc(50% - 8px)}.room-details{display:none}}
+        @media(max-width:420px){.app-shell{padding:12px}.brand{font-size:1.1rem}.brand-mark{width:36px;height:36px;border-radius:12px}.status-pill{padding:8px 10px;font-size:.75rem}.video-card{min-height:205px}.control-btn{font-size:.88rem;padding:11px 8px}}
+        @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+    </style>
 </head>
 <body>
-    <h1>CodeCall</h1>
+<div class="app-shell">
+    <header class="topbar">
+        <div class="brand"><div class="brand-mark"><i class="bi bi-camera-video-fill"></i></div><span>CodeCall</span></div>
+        <div class="topbar-meta"><div class="eyebrow">Комната</div><div class="room-code">{{ room.room_code }}</div><div class="subtle small room-details">Создана {{ room.created_at|date:"d.m.Y H:i" }}</div></div>
+    </header>
+    <main class="py-4 py-md-5">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+            <div><div class="eyebrow mb-2">Видеоконференция</div><h1 class="h3 fw-semibold mb-1">Звонок</h1><p class="subtle mb-0">Поделись ссылкой, чтобы пригласить собеседника.</p></div>
+            <div class="status-pill"><span class="status-dot" id="connection-dot"></span><span id="connection-status">Второй участник пока не подключён</span></div>
+        </div>
+        <div class="row g-3 g-lg-4">
+            <div class="col-12 col-lg-6"><div class="video-card"><video id="local-video" autoplay playsinline muted></video><div class="video-placeholder" id="local-placeholder"><div class="placeholder-icon"><i class="bi bi-person-video3"></i></div><span>Твоя камера пока выключена</span></div><div class="video-label"><i class="bi bi-person-fill"></i> Ты</div></div></div>
+            <div class="col-12 col-lg-6"><div class="video-card"><video id="remote-video" autoplay playsinline></video><div class="video-placeholder" id="remote-placeholder"><div class="placeholder-icon"><i class="bi bi-people"></i></div><span>Ожидаем видео собеседника</span></div><div class="video-label"><i class="bi bi-person-video"></i> Собеседник</div></div></div>
+        </div>
+        <div class="row g-3 g-lg-4 mt-1">
+            <div class="col-12 col-lg-8"><section class="control-panel"><div class="section-heading mb-3">Управление звонком</div>
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <button id="call-button" class="control-btn primary" type="button"><i class="bi bi-telephone-fill"></i> Начать звонок</button>
+                    <button id="mic-button" class="control-btn" type="button"><i class="bi bi-mic-fill"></i> Включить микрофон</button>
+                    <button id="camera-button" class="control-btn" type="button"><i class="bi bi-camera-video-fill"></i> Включить камеру</button>
+                    <button id="screen-button" class="control-btn" type="button" disabled><i class="bi bi-display"></i> Показать экран</button>
+                </div>
+                <div class="eyebrow mb-2">Состояние звонка</div><div id="call-status" class="status-box mb-3">Ожидание звонка</div><div id="mic-status" class="subtle small">Микрофон не подключён</div>
+            </section></div>
+            <div class="col-12 col-lg-4"><section class="control-panel"><div class="section-heading mb-2">Пригласить участника</div><p class="subtle small mb-3">Скопируй ссылку на эту комнату и отправь её человеку, с которым хочешь поговорить.</p>
+                <button id="copy-button" class="control-btn w-100 mb-3" type="button"><i class="bi bi-link-45deg"></i> Скопировать ссылку</button>
+                <div class="invite-note mb-3"><i class="bi bi-shield-check me-1"></i> Для звонка собеседнику нужно открыть ссылку на эту комнату.</div>
+                <div class="border-top pt-3" style="border-color:var(--border)!important"><a href="/" class="action-link small"><i class="bi bi-arrow-left me-1"></i> Вернуться на главную</a></div>
+            </section></div>
+        </div>
+    </main>
+    <footer class="d-flex flex-wrap justify-content-between gap-2 pt-3 pb-2 subtle small"><span>CodeCall</span><span>Приватные разговоры, простое подключение.</span></footer>
+</div>
+<script>
+    const roomCode = window.location.pathname.split("/")[2];
+    const clientId = crypto.randomUUID();
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const signalingSocket = new WebSocket(`${wsProtocol}//${window.location.host}/ws/room/${roomCode}/`);
 
-    <p>Комната: {{ room.room_code }}</p>
-    <p>Создана: {{ room.created_at|date:"d.m.Y H:i" }}</p>
-
-    <hr>
-
-    <h2>Участники</h2>
-
-    <div>
-        <p>Ты — организатор комнаты</p>
-        <p id="connection-status">Второй участник пока не подключён</p>
-    </div>
-
-    <hr>
-
-    <h2>Управление звонком</h2>
-
-    <button id="call-button">Начать звонок</button>
-    <p id="call-status">Ожидание звонка</p>
-
-    <button id="mic-button">Включить микрофон</button>
-    <p id="mic-status" style="color: gray;">
-    Микрофон не подключён
-    </p>
-    
-    <button id="camera-button">Включить камеру</button>
-
-    <div>
-        <h3>Твоя камера</h3>
-        <video
-            id="local-video"
-            autoplay
-            playsinline
-            muted
-            width="320"
-        ></video>
-    </div>
-
-    <div>
-        <h3>Камера собеседника</h3>
-        <video
-            id="remote-video"
-            autoplay
-            playsinline
-            width="320"
-        ></video>
-    </div>
-    <button id="screen-button" disabled>Показать экран</button>
-
-    <p>Управление звонком скоро заработает.</p>
-
-    <button id="copy-button">Скопировать ссылку</button>
-    <a href="/">На главную</a>
-
-    <script>
-
-        const roomCode = window.location.pathname.split("/")[2];
-        const clientId = crypto.randomUUID();
-
-        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-
-        const signalingSocket = new WebSocket(
-            `${wsProtocol}//${window.location.host}/ws/room/${roomCode}/`
-        );
-
-        signalingSocket.onopen = () => {
-            console.log("CodeCall signaling connected!");
-        };
-
-       
-        signalingSocket.onmessage = async (event) => {
-            const data = JSON.parse(event.data);
-
-            if (data.sender === clientId) {
-                return;
+    signalingSocket.onopen = () => console.log("CodeCall signaling connected!");
+    signalingSocket.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        if (data.sender === clientId) return;
+        console.log("Signaling message received:", data);
+        try {
+            if (data.type === "offer") {
+                await peerConnection.setRemoteDescription(data.offer);
+                while (pendingCandidates.length > 0) await peerConnection.addIceCandidate(pendingCandidates.shift());
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                signalingSocket.send(JSON.stringify({type:"answer",answer:peerConnection.localDescription,sender:clientId}));
+            } else if (data.type === "answer") {
+                await peerConnection.setRemoteDescription(data.answer);
+                while (pendingCandidates.length > 0) await peerConnection.addIceCandidate(pendingCandidates.shift());
+            } else if (data.type === "ice" && data.candidate) {
+                if (peerConnection.remoteDescription) await peerConnection.addIceCandidate(data.candidate);
+                else pendingCandidates.push(data.candidate);
             }
+        } catch (error) { console.error("Ошибка обработки WebRTC-сообщения:", error); }
+    };
+    signalingSocket.onclose = () => console.log("CodeCall signaling disconnected.");
+    signalingSocket.onerror = (error) => console.error("Signaling WebSocket error:", error);
 
-            console.log("Signaling message received:", data);
+    const pendingCandidates = [];
+    const peerConnection = new RTCPeerConnection({iceServers:[
+        {urls:"stun:stun.relay.metered.ca:80"},
+        {urls:"turn:global.relay.metered.ca:80",username:"39bc8dc42a82c9d0afc1ecd7",credential:"N8VPw4pM8LuIQDFa"},
+        {urls:"turn:global.relay.metered.ca:80?transport=tcp",username:"39bc8dc42a82c9d0afc1ecd7",credential:"N8VPw4pM8LuIQDFa"},
+        {urls:"turn:global.relay.metered.ca:443",username:"39bc8dc42a82c9d0afc1ecd7",credential:"N8VPw4pM8LuIQDFa"},
+        {urls:"turns:global.relay.metered.ca:443?transport=tcp",username:"39bc8dc42a82c9d0afc1ecd7",credential:"N8VPw4pM8LuIQDFa"}
+    ]});
 
-            try {
-                if (data.type === "offer") {
-                    await peerConnection.setRemoteDescription(data.offer);
-                    while (pendingCandidates.length > 0) {
-                        const candidate = pendingCandidates.shift();
-                        await peerConnection.addIceCandidate(candidate);
-                    }
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-
-                                        
-                    signalingSocket.send(JSON.stringify({
-                        type: "answer",
-                        answer: peerConnection.localDescription,
-                        sender: clientId
-                    }));
-
-                } else if (data.type === "answer") {
-                    await peerConnection.setRemoteDescription(data.answer);
-                    while (pendingCandidates.length > 0) {
-                        const candidate = pendingCandidates.shift();
-                        await peerConnection.addIceCandidate(candidate);
-                    }
-
-                
-                } else if (data.type === "ice" && data.candidate) {
-                    if (peerConnection.remoteDescription) {
-                        await peerConnection.addIceCandidate(data.candidate);
-                    } else {
-                        pendingCandidates.push(data.candidate);
-                    }
-                }
-            } catch (error) {
-                console.error("Ошибка обработки WebRTC-сообщения:", error);
-            }
-        };
-
-        signalingSocket.onclose = () => {
-            console.log("CodeCall signaling disconnected.");
-        };
-
-        signalingSocket.onerror = (error) => {
-            console.error("Signaling WebSocket error:", error);
-        };
-
-
-        const pendingCandidates = [];   
-        
-        const peerConnection = new RTCPeerConnection({
-            iceServers: [
-                {
-                    urls: "stun:stun.relay.metered.ca:80",
-                },
-                {
-                    urls: "turn:global.relay.metered.ca:80",
-                    username: "39bc8dc42a82c9d0afc1ecd7",
-                    credential: "N8VPw4pM8LuIQDFa",
-                },
-                {
-                    urls: "turn:global.relay.metered.ca:80?transport=tcp",
-                    username: "39bc8dc42a82c9d0afc1ecd7",
-                    credential: "N8VPw4pM8LuIQDFa",
-                },
-                {
-                    urls: "turn:global.relay.metered.ca:443",
-                    username: "39bc8dc42a82c9d0afc1ecd7",
-                    credential: "N8VPw4pM8LuIQDFa",
-                },
-                {
-                    urls: "turns:global.relay.metered.ca:443?transport=tcp",
-                    username: "39bc8dc42a82c9d0afc1ecd7",
-                    credential: "N8VPw4pM8LuIQDFa",
-                },
-            ],
-        });
-
-                
-        const callButton = document.getElementById("call-button");
-        const callStatus = document.getElementById("call-status");
-
-        callButton.addEventListener("click", async () => {
-            try {
-                if (signalingSocket.readyState !== WebSocket.OPEN) {
-                    callStatus.textContent = "Подключение к серверу...";
-                    return;
-                }
-                const offer = await peerConnection.createOffer();
-
-                await peerConnection.setLocalDescription(offer);
-
-                signalingSocket.send(JSON.stringify({
-                    type: "offer",
-                    offer: peerConnection.localDescription,
-                    sender: clientId
-                }));
-
-                callStatus.textContent = "Предложение звонка отправлено";
-            } catch (error) {
-                console.error("Ошибка начала звонка:", error);
-                callStatus.textContent = "Не удалось начать звонок";
-            }
-        });
-
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                signalingSocket.send(JSON.stringify({
-                    type: "ice",
-                    candidate: event.candidate,
-                    sender: clientId
-                }));
-            }
-        };
-
-        peerConnection.onconnectionstatechange = () => {
-            console.log(
-                "WebRTC connection state:",
-                peerConnection.connectionState
-            );
-        };
-
-
-        const remoteVideo = document.getElementById("remote-video");
-
-        peerConnection.ontrack = (event) => {
-            remoteVideo.srcObject = event.streams[0];
-            console.log("Получен медиапоток собеседника!");
-        };
-
-        const copyButton = document.getElementById('copy-button');
-
-        copyButton.addEventListener('click', async () => {
-            try {
-                await navigator.clipboard.writeText(window.location.href);
-                copyButton.textContent = 'Ссылка скопирована!';
-            } catch (error) {
-                alert('Не удалось скопировать ссылку. Скопируй её из адресной строки.');
-            }
-        });
-        const micButton = document.getElementById('mic-button');
-        const micStatus = document.getElementById('mic-status');
-
-        const combinedStream = new MediaStream();
-        
-        function addTracksToPeerConnection(stream) {
-            console.log("Дорожки для отправки:", stream.getTracks());
-            stream.getTracks().forEach(track => {
-                const alreadyAdded = peerConnection
-                    .getSenders()
-                    .some(sender => sender.track === track);
-
-                if (!alreadyAdded) {
-                    peerConnection.addTrack(track, combinedStream);
-                    console.log("Дорожка добавлена:", track.kind);
-                }
-            });
+    const callButton = document.getElementById("call-button");
+    const callStatus = document.getElementById("call-status");
+    callButton.addEventListener("click", async () => {
+        try {
+            if (signalingSocket.readyState !== WebSocket.OPEN) { callStatus.textContent = "Подключение к серверу..."; return; }
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            signalingSocket.send(JSON.stringify({type:"offer",offer:peerConnection.localDescription,sender:clientId}));
+            callStatus.textContent = "Предложение звонка отправлено";
+        } catch (error) { console.error("Ошибка начала звонка:", error); callStatus.textContent = "Не удалось начать звонок"; }
+    });
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) signalingSocket.send(JSON.stringify({type:"ice",candidate:event.candidate,sender:clientId}));
+    };
+    peerConnection.onconnectionstatechange = () => {
+        console.log("WebRTC connection state:", peerConnection.connectionState);
+        const statusText = document.getElementById("connection-status");
+        const statusDot = document.getElementById("connection-dot");
+        if (peerConnection.connectionState === "connected") {
+            statusText.textContent = "Соединение установлено"; statusDot.style.background = "#53d69a"; statusDot.style.boxShadow = "0 0 0 4px rgba(83,214,154,.12)";
+        } else if (peerConnection.connectionState === "connecting" || peerConnection.connectionState === "new") {
+            statusText.textContent = "Подключение..."; statusDot.style.background = "#e8bd67"; statusDot.style.boxShadow = "0 0 0 4px rgba(232,189,103,.12)";
+        } else if (["disconnected","failed","closed"].includes(peerConnection.connectionState)) {
+            statusText.textContent = "Соединение не установлено"; statusDot.style.background = "#e07883"; statusDot.style.boxShadow = "0 0 0 4px rgba(224,120,131,.12)";
         }
+    };
 
-        let localStream = null;
+    const remoteVideo = document.getElementById("remote-video");
+    const localVideo = document.getElementById("local-video");
+    const localPlaceholder = document.getElementById("local-placeholder");
+    const remotePlaceholder = document.getElementById("remote-placeholder");
+    peerConnection.ontrack = (event) => { remoteVideo.srcObject = event.streams[0]; console.log("Получен медиапоток собеседника!"); };
+    localVideo.addEventListener("playing", () => localPlaceholder.classList.add("is-hidden"));
+    localVideo.addEventListener("emptied", () => localPlaceholder.classList.remove("is-hidden"));
+    remoteVideo.addEventListener("playing", () => remotePlaceholder.classList.add("is-hidden"));
+    remoteVideo.addEventListener("emptied", () => remotePlaceholder.classList.remove("is-hidden"));
 
-        micButton.addEventListener('click', async () => {
-            try {
-                if (localStream === null) {
-                    
-                    localStream = await navigator.mediaDevices.getUserMedia({
-                        audio: true
-                    });
+    const copyButton = document.getElementById("copy-button");
+    copyButton.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(window.location.href); copyButton.innerHTML = '<i class="bi bi-check2"></i> Ссылка скопирована!'; }
+        catch (error) { alert("Не удалось скопировать ссылку. Скопируй её из адресной строки."); }
+    });
 
-                    localStream.getAudioTracks().forEach(track => {
-                        combinedStream.addTrack(track);
-                    });
-
-                    addTracksToPeerConnection(localStream);
-
-                    micButton.textContent = 'Выключить микрофон';
-                    console.log('Микрофон подключён');
-                    micStatus.textContent = 'Микрофон включён';
-                    micStatus.style.color = 'green';
-                } else {
-                    const audioTrack = localStream.getAudioTracks()[0];
-
-                    audioTrack.enabled = !audioTrack.enabled;
-                    micStatus.textContent = audioTrack.enabled
-                        ? 'Микрофон включён' 
-                        : 'Микрофон выключен';
-                    micStatus.style.color = audioTrack.enabled
-                        ? 'green'
-                        : 'black';
-
-                    micButton.textContent = audioTrack.enabled
-                        ? 'Выключить микрофон'
-                        : 'Включить микрофон';
-                    
-                }
-            } catch (error) {
-                console.error('Ошибка доступа к микрофону:', error);
-                micStatus.textContent = 'Не удалось подключить микрофон';
-                micStatus.style.color = 'red';
-                alert('Не удалось получить доступ к микрофону. Проверь разрешения браузера.');
-            }
-            console.log(
-                combinedStream.getTracks().map(track => ({
-                    kind: track.kind,
-                    enabled: track.enabled,
-                    readyState: track.readyState
-                }))
-            );
+    const micButton = document.getElementById("mic-button");
+    const micStatus = document.getElementById("mic-status");
+    const combinedStream = new MediaStream();
+    function addTracksToPeerConnection(stream) {
+        console.log("Дорожки для отправки:", stream.getTracks());
+        stream.getTracks().forEach(track => {
+            const alreadyAdded = peerConnection.getSenders().some(sender => sender.track === track);
+            if (!alreadyAdded) { peerConnection.addTrack(track, combinedStream); console.log("Дорожка добавлена:", track.kind); }
         });
-
-        const cameraButton = document.getElementById('camera-button');
-        const localVideo = document.getElementById('local-video');
-
-        let cameraStream = null;
-
-        
-        cameraButton.addEventListener('click', async () => {
-            try {
-                if (cameraStream === null) {
-                    
-                    cameraStream = await navigator.mediaDevices.getUserMedia({
-                        video: true
-                    });
-
-                    cameraStream.getVideoTracks().forEach(track => {
-                        combinedStream.addTrack(track);
-                    });
-                    
-                    addTracksToPeerConnection(cameraStream);
-
-                    localVideo.srcObject = combinedStream;
-                    cameraButton.textContent = 'Выключить камеру';
-                } else {
-                    
-                    cameraStream.getVideoTracks().forEach(track => {
-                        combinedStream.removeTrack(track);
-                        track.stop();
-                    });
-
-                    cameraStream = null;
-                    localVideo.srcObject = combinedStream;
-                    cameraButton.textContent = 'Включить камеру';
-                }
-            } catch (error) {
-                console.error('Ошибка доступа к камере:', error);
-                alert('Не удалось получить доступ к камере. Проверь разрешения браузера.');
+    }
+    let localStream = null;
+    micButton.addEventListener("click", async () => {
+        try {
+            if (localStream === null) {
+                localStream = await navigator.mediaDevices.getUserMedia({audio:true});
+                localStream.getAudioTracks().forEach(track => combinedStream.addTrack(track));
+                addTracksToPeerConnection(localStream);
+                micButton.innerHTML = '<i class="bi bi-mic-mute-fill"></i> Выключить микрофон';
+                micStatus.textContent = "Микрофон включён"; micStatus.style.color = "#53d69a";
+            } else {
+                const audioTrack = localStream.getAudioTracks()[0]; audioTrack.enabled = !audioTrack.enabled;
+                micStatus.textContent = audioTrack.enabled ? "Микрофон включён" : "Микрофон выключен";
+                micStatus.style.color = audioTrack.enabled ? "#53d69a" : "#e07883";
+                micButton.innerHTML = audioTrack.enabled ? '<i class="bi bi-mic-mute-fill"></i> Выключить микрофон' : '<i class="bi bi-mic-fill"></i> Включить микрофон';
             }
-            console.log(
-                combinedStream.getTracks().map(track => ({
-                    kind: track.kind,
-                    enabled: track.enabled,
-                    readyState: track.readyState
-                }))
-            );
-        });
+        } catch (error) {
+            console.error("Ошибка доступа к микрофону:", error); micStatus.textContent = "Не удалось подключить микрофон"; micStatus.style.color = "#e07883";
+            alert("Не удалось получить доступ к микрофону. Проверь разрешения браузера.");
+        }
+        console.log(combinedStream.getTracks().map(track => ({kind:track.kind,enabled:track.enabled,readyState:track.readyState})));
+    });
 
-        
-    </script>
+    const cameraButton = document.getElementById("camera-button");
+    let cameraStream = null;
+    cameraButton.addEventListener("click", async () => {
+        try {
+            if (cameraStream === null) {
+                cameraStream = await navigator.mediaDevices.getUserMedia({video:true});
+                cameraStream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
+                addTracksToPeerConnection(cameraStream); localVideo.srcObject = combinedStream;
+                cameraButton.innerHTML = '<i class="bi bi-camera-video-off-fill"></i> Выключить камеру'; localPlaceholder.classList.add("is-hidden");
+            } else {
+                cameraStream.getVideoTracks().forEach(track => { combinedStream.removeTrack(track); track.stop(); });
+                cameraStream = null; localVideo.srcObject = combinedStream;
+                cameraButton.innerHTML = '<i class="bi bi-camera-video-fill"></i> Включить камеру'; localPlaceholder.classList.remove("is-hidden");
+            }
+        } catch (error) { console.error("Ошибка доступа к камере:", error); alert("Не удалось получить доступ к камере. Проверь разрешения браузера."); }
+        console.log(combinedStream.getTracks().map(track => ({kind:track.kind,enabled:track.enabled,readyState:track.readyState})));
+    });
+</script>
 </body>
 </html>
-

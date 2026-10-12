@@ -93,13 +93,33 @@
     signalingSocket.onerror = (error) => console.error("Signaling WebSocket error:", error);
 
     const pendingCandidates = [];
-    const peerConnection = new RTCPeerConnection({iceServers:[
-        {urls:"stun:stun.relay.metered.ca:80"},
-        {urls:"turn:global.relay.metered.ca:80",username:"39bc8dc42a82c9d0afc1ecd7",credential:"N8VPw4pM8LuIQDFa"},
-        {urls:"turn:global.relay.metered.ca:80?transport=tcp",username:"39bc8dc42a82c9d0afc1ecd7",credential:"N8VPw4pM8LuIQDFa"},
-        {urls:"turn:global.relay.metered.ca:443",username:"39bc8dc42a82c9d0afc1ecd7",credential:"N8VPw4pM8LuIQDFa"},
-        {urls:"turns:global.relay.metered.ca:443?transport=tcp",username:"39bc8dc42a82c9d0afc1ecd7",credential:"N8VPw4pM8LuIQDFa"}
-    ]});
+    const peerConnection = new RTCPeerConnection({
+        iceServers: [
+            {
+            urls: "stun:stun.relay.metered.ca:80",
+            },
+            {
+            urls: "turn:standard.relay.metered.ca:80",
+            username: "39bc8dc42a82c9d0afc1ecd7",
+            credential: "N8VPw4pM8LuIQDFa",
+            },
+            {
+            urls: "turn:standard.relay.metered.ca:80?transport=tcp",
+            username: "39bc8dc42a82c9d0afc1ecd7",
+            credential: "N8VPw4pM8LuIQDFa",
+            },
+            {
+            urls: "turn:standard.relay.metered.ca:443",
+            username: "39bc8dc42a82c9d0afc1ecd7",
+            credential: "N8VPw4pM8LuIQDFa",
+            },
+            {
+            urls: "turns:standard.relay.metered.ca:443?transport=tcp",
+            username: "39bc8dc42a82c9d0afc1ecd7",
+            credential: "N8VPw4pM8LuIQDFa",
+            },
+        ],
+    });
 
     const callButton = document.getElementById("call-button");
     const callStatus = document.getElementById("call-status");

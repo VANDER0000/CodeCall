@@ -63,155 +63,245 @@
     <footer class="d-flex flex-wrap justify-content-between gap-2 pt-3 pb-2 subtle small"><span>CodeCall</span><span>Приватные разговоры, простое подключение.</span></footer>
 </div>
 <script>
+    // ---------- Базовые значения и элементы ----------
     const roomCode = window.location.pathname.split("/")[2];
-    const clientId = crypto.randomUUID();
+    const clientId = crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+
+    const callButton = document.getElementById("call-button");
+    const callStatus = document.getElementById("call-status");
+    const micButton = document.getElementById("mic-button");
+    const micStatus = document.getElementById("mic-status");
+    const cameraButton = document.getElementById("camera-button");
+    const copyButton = document.getElementById("copy-button");
+    const localVideo = document.getElementById("local-video");
+    const remoteVideo = document.getElementById("remote-video");
+    const localPlaceholder = document.getElementById("local-placeholder");
+    const remotePlaceholder = document.getElementById("remote-placeholder");
+
+    // ---------- RTCPeerConnection ----------
+    const pendingCandidates = [];
+    let makingOffer = false;   // идёт создание нашего offer (нужно для perfect negotiation)
+    let ignoreOffer = false;   // «невежливая» сторона игнорирует чужой offer при коллизии
+    let callStarted = false;   // звонок начат (нами или собеседником)
+
+    const peerConnection = new RTCPeerConnection({
+        // TODO: перевыпусти ключи Metered и не храни их в репозитории
+        iceServers: [
+            {
+                urls: "stun:stun.relay.metered.ca:80",
+            },
+            {
+                urls: "turn:standard.relay.metered.ca:80",
+                username: "39bc8dc42a82c9d0afc1ecd7",
+                credential: "N8VPw4pM8LuIQDFa",
+            },
+            {
+                urls: "turn:standard.relay.metered.ca:80?transport=tcp",
+                username: "39bc8dc42a82c9d0afc1ecd7",
+                credential: "N8VPw4pM8LuIQDFa",
+            },
+            {
+                urls: "turn:standard.relay.metered.ca:443",
+                username: "39bc8dc42a82c9d0afc1ecd7",
+                credential: "N8VPw4pM8LuIQDFa",
+            },
+            {
+                urls: "turns:standard.relay.metered.ca:443?transport=tcp",
+                username: "39bc8dc42a82c9d0afc1ecd7",
+                credential: "N8VPw4pM8LuIQDFa",
+            },
+        ],
+    });
+
+    // Два transceiver создаются сразу: в offer всегда есть аудио- и видеосекции,
+    // а камера/микрофон потом включаются через sender.replaceTrack() без нового обмена SDP.
+    const audioTransceiver = peerConnection.addTransceiver("audio", { direction: "sendrecv" });
+    const videoTransceiver = peerConnection.addTransceiver("video", { direction: "sendrecv" });
+
+    const localPreview = new MediaStream();   // только для превью своей камеры
+    const remoteStream = new MediaStream();   // сюда складываются дорожки собеседника
+    localVideo.srcObject = localPreview;
+
+    // ---------- Сигналинг ----------
     const signalingSocket = new WebSocket(`${wsProtocol}//${window.location.host}/ws/room/${roomCode}/`);
 
+    function sendSignal(message) {
+        if (signalingSocket.readyState !== WebSocket.OPEN) return false;
+        signalingSocket.send(JSON.stringify({ ...message, sender: clientId }));
+        return true;
+    }
+
+    async function flushPendingCandidates() {
+        while (pendingCandidates.length > 0) {
+            try { await peerConnection.addIceCandidate(pendingCandidates.shift()); }
+            catch (error) { console.warn("Не удалось добавить ICE-кандидата:", error); }
+        }
+    }
+
+    async function makeOffer() {
+        if (signalingSocket.readyState !== WebSocket.OPEN) {
+            callStatus.textContent = "Подключение к серверу...";
+            return;
+        }
+        try {
+            makingOffer = true;
+            await peerConnection.setLocalDescription();   // сам создаёт нужный offer
+            sendSignal({ type: "offer", offer: peerConnection.localDescription });
+            callStatus.textContent = "Предложение звонка отправлено";
+        } catch (error) {
+            console.error("Ошибка начала звонка:", error);
+            callStatus.textContent = "Не удалось начать звонок";
+        } finally {
+            makingOffer = false;
+        }
+    }
+
+    // Браузер сам сообщает, когда нужно новое согласование (новый transceiver, restartIce и т.д.)
+    peerConnection.onnegotiationneeded = () => {
+        if (callStarted) makeOffer();
+    };
+
     signalingSocket.onopen = () => console.log("CodeCall signaling connected!");
+    signalingSocket.onclose = () => console.log("CodeCall signaling disconnected.");
+    signalingSocket.onerror = (error) => console.error("Signaling WebSocket error:", error);
+
     signalingSocket.onmessage = async (event) => {
         const data = JSON.parse(event.data);
         if (data.sender === clientId) return;
         console.log("Signaling message received:", data);
+
+        // Роли «вежливый/невежливый» задаются сравнением id: у двоих они всегда разные
+        const polite = clientId > data.sender;
+
         try {
-            if (data.type === "offer") {
-                await peerConnection.setRemoteDescription(data.offer);
-                while (pendingCandidates.length > 0) await peerConnection.addIceCandidate(pendingCandidates.shift());
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                signalingSocket.send(JSON.stringify({type:"answer",answer:peerConnection.localDescription,sender:clientId}));
-            } else if (data.type === "answer") {
-                await peerConnection.setRemoteDescription(data.answer);
-                while (pendingCandidates.length > 0) await peerConnection.addIceCandidate(pendingCandidates.shift());
+            if (data.type === "offer" || data.type === "answer") {
+                const description = data.type === "offer" ? data.offer : data.answer;
+
+                // Коллизия: пришёл offer, пока мы сами делаем offer или ждём answer
+                const offerCollision = description.type === "offer" &&
+                    (makingOffer || peerConnection.signalingState !== "stable");
+
+                ignoreOffer = !polite && offerCollision;
+                if (ignoreOffer) {
+                    pendingCandidates.length = 0;
+                    console.log("Коллизия offer: чужой offer проигнорирован");
+                    return;
+                }
+
+                // Вежливая сторона при коллизии откатывает свой offer неявно (implicit rollback)
+                await peerConnection.setRemoteDescription(description);
+                await flushPendingCandidates();
+
+                if (description.type === "offer") {
+                    callStarted = true;
+                    await peerConnection.setLocalDescription();   // создаёт answer
+                    sendSignal({ type: "answer", answer: peerConnection.localDescription });
+                    callStatus.textContent = "Входящий звонок принят";
+                }
             } else if (data.type === "ice" && data.candidate) {
+                if (ignoreOffer) return;   // кандидаты от проигнорированного offer не нужны
                 if (peerConnection.remoteDescription) await peerConnection.addIceCandidate(data.candidate);
                 else pendingCandidates.push(data.candidate);
             }
         } catch (error) { console.error("Ошибка обработки WebRTC-сообщения:", error); }
     };
-    signalingSocket.onclose = () => console.log("CodeCall signaling disconnected.");
-    signalingSocket.onerror = (error) => console.error("Signaling WebSocket error:", error);
 
-    const pendingCandidates = [];
-    const peerConnection = new RTCPeerConnection({
-        iceServers: [
-            {
-            urls: "stun:stun.relay.metered.ca:80",
-            },
-            {
-            urls: "turn:standard.relay.metered.ca:80",
-            username: "39bc8dc42a82c9d0afc1ecd7",
-            credential: "N8VPw4pM8LuIQDFa",
-            },
-            {
-            urls: "turn:standard.relay.metered.ca:80?transport=tcp",
-            username: "39bc8dc42a82c9d0afc1ecd7",
-            credential: "N8VPw4pM8LuIQDFa",
-            },
-            {
-            urls: "turn:standard.relay.metered.ca:443",
-            username: "39bc8dc42a82c9d0afc1ecd7",
-            credential: "N8VPw4pM8LuIQDFa",
-            },
-            {
-            urls: "turns:standard.relay.metered.ca:443?transport=tcp",
-            username: "39bc8dc42a82c9d0afc1ecd7",
-            credential: "N8VPw4pM8LuIQDFa",
-            },
-        ],
-    });
-
-    const callButton = document.getElementById("call-button");
-    const callStatus = document.getElementById("call-status");
-    callButton.addEventListener("click", async () => {
-        try {
-            if (signalingSocket.readyState !== WebSocket.OPEN) { callStatus.textContent = "Подключение к серверу..."; return; }
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            signalingSocket.send(JSON.stringify({type:"offer",offer:peerConnection.localDescription,sender:clientId}));
-            callStatus.textContent = "Предложение звонка отправлено";
-        } catch (error) { console.error("Ошибка начала звонка:", error); callStatus.textContent = "Не удалось начать звонок"; }
-    });
     peerConnection.onicecandidate = (event) => {
-        if (event.candidate) signalingSocket.send(JSON.stringify({type:"ice",candidate:event.candidate,sender:clientId}));
+        if (event.candidate) sendSignal({ type: "ice", candidate: event.candidate });
     };
+
     peerConnection.onconnectionstatechange = () => {
         console.log("WebRTC connection state:", peerConnection.connectionState);
         const statusText = document.getElementById("connection-status");
         const statusDot = document.getElementById("connection-dot");
         if (peerConnection.connectionState === "connected") {
             statusText.textContent = "Соединение установлено"; statusDot.style.background = "#53d69a"; statusDot.style.boxShadow = "0 0 0 4px rgba(83,214,154,.12)";
+            callStatus.textContent = "Звонок идёт";
         } else if (peerConnection.connectionState === "connecting" || peerConnection.connectionState === "new") {
             statusText.textContent = "Подключение..."; statusDot.style.background = "#e8bd67"; statusDot.style.boxShadow = "0 0 0 4px rgba(232,189,103,.12)";
-        } else if (["disconnected","failed","closed"].includes(peerConnection.connectionState)) {
+        } else if (["disconnected", "failed", "closed"].includes(peerConnection.connectionState)) {
             statusText.textContent = "Соединение не установлено"; statusDot.style.background = "#e07883"; statusDot.style.boxShadow = "0 0 0 4px rgba(224,120,131,.12)";
         }
     };
 
-    const remoteVideo = document.getElementById("remote-video");
-    const localVideo = document.getElementById("local-video");
-    const localPlaceholder = document.getElementById("local-placeholder");
-    const remotePlaceholder = document.getElementById("remote-placeholder");
-    peerConnection.ontrack = (event) => { remoteVideo.srcObject = event.streams[0]; console.log("Получен медиапоток собеседника!"); };
-    localVideo.addEventListener("playing", () => localPlaceholder.classList.add("is-hidden"));
-    localVideo.addEventListener("emptied", () => localPlaceholder.classList.remove("is-hidden"));
-    remoteVideo.addEventListener("playing", () => remotePlaceholder.classList.add("is-hidden"));
-    remoteVideo.addEventListener("emptied", () => remotePlaceholder.classList.remove("is-hidden"));
+    // ---------- Видео собеседника ----------
+    peerConnection.ontrack = ({ track }) => {
+        remoteStream.addTrack(track);
+        if (remoteVideo.srcObject !== remoteStream) remoteVideo.srcObject = remoteStream;
+        console.log("Получена дорожка собеседника:", track.kind);
 
-    const copyButton = document.getElementById("copy-button");
+        if (track.kind === "video") {
+            // Пока кадры не идут (или собеседник выключил камеру), дорожка в состоянии muted
+            const syncPlaceholder = () => remotePlaceholder.classList.toggle("is-hidden", track.muted);
+            track.onmute = syncPlaceholder;
+            track.onunmute = syncPlaceholder;
+            syncPlaceholder();
+        }
+    };
+
+    // ---------- Кнопка «Начать звонок» ----------
+    callButton.addEventListener("click", () => {
+        callStarted = true;
+        makeOffer();
+    });
+
+    // ---------- Копирование ссылки ----------
     copyButton.addEventListener("click", async () => {
         try { await navigator.clipboard.writeText(window.location.href); copyButton.innerHTML = '<i class="bi bi-check2"></i> Ссылка скопирована!'; }
         catch (error) { alert("Не удалось скопировать ссылку. Скопируй её из адресной строки."); }
     });
 
-    const micButton = document.getElementById("mic-button");
-    const micStatus = document.getElementById("mic-status");
-    const combinedStream = new MediaStream();
-    function addTracksToPeerConnection(stream) {
-        console.log("Дорожки для отправки:", stream.getTracks());
-        stream.getTracks().forEach(track => {
-            const alreadyAdded = peerConnection.getSenders().some(sender => sender.track === track);
-            if (!alreadyAdded) { peerConnection.addTrack(track, combinedStream); console.log("Дорожка добавлена:", track.kind); }
-        });
-    }
-    let localStream = null;
+    // ---------- Микрофон ----------
+    let micTrack = null;
     micButton.addEventListener("click", async () => {
         try {
-            if (localStream === null) {
-                localStream = await navigator.mediaDevices.getUserMedia({audio:true});
-                localStream.getAudioTracks().forEach(track => combinedStream.addTrack(track));
-                addTracksToPeerConnection(localStream);
+            if (micTrack === null) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                micTrack = stream.getAudioTracks()[0];
+                await audioTransceiver.sender.replaceTrack(micTrack);
                 micButton.innerHTML = '<i class="bi bi-mic-mute-fill"></i> Выключить микрофон';
                 micStatus.textContent = "Микрофон включён"; micStatus.style.color = "#53d69a";
             } else {
-                const audioTrack = localStream.getAudioTracks()[0]; audioTrack.enabled = !audioTrack.enabled;
-                micStatus.textContent = audioTrack.enabled ? "Микрофон включён" : "Микрофон выключен";
-                micStatus.style.color = audioTrack.enabled ? "#53d69a" : "#e07883";
-                micButton.innerHTML = audioTrack.enabled ? '<i class="bi bi-mic-mute-fill"></i> Выключить микрофон' : '<i class="bi bi-mic-fill"></i> Включить микрофон';
+                micTrack.enabled = !micTrack.enabled;
+                micStatus.textContent = micTrack.enabled ? "Микрофон включён" : "Микрофон выключен";
+                micStatus.style.color = micTrack.enabled ? "#53d69a" : "#e07883";
+                micButton.innerHTML = micTrack.enabled
+                    ? '<i class="bi bi-mic-mute-fill"></i> Выключить микрофон'
+                    : '<i class="bi bi-mic-fill"></i> Включить микрофон';
             }
         } catch (error) {
-            console.error("Ошибка доступа к микрофону:", error); micStatus.textContent = "Не удалось подключить микрофон"; micStatus.style.color = "#e07883";
+            console.error("Ошибка доступа к микрофону:", error);
+            micStatus.textContent = "Не удалось подключить микрофон"; micStatus.style.color = "#e07883";
             alert("Не удалось получить доступ к микрофону. Проверь разрешения браузера.");
         }
-        console.log(combinedStream.getTracks().map(track => ({kind:track.kind,enabled:track.enabled,readyState:track.readyState})));
     });
 
-    const cameraButton = document.getElementById("camera-button");
-    let cameraStream = null;
+    // ---------- Камера ----------
+    let cameraTrack = null;
     cameraButton.addEventListener("click", async () => {
         try {
-            if (cameraStream === null) {
-                cameraStream = await navigator.mediaDevices.getUserMedia({video:true});
-                cameraStream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
-                addTracksToPeerConnection(cameraStream); localVideo.srcObject = combinedStream;
-                cameraButton.innerHTML = '<i class="bi bi-camera-video-off-fill"></i> Выключить камеру'; localPlaceholder.classList.add("is-hidden");
+            if (cameraTrack === null) {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                cameraTrack = stream.getVideoTracks()[0];
+                await videoTransceiver.sender.replaceTrack(cameraTrack);
+                localPreview.addTrack(cameraTrack);
+                cameraButton.innerHTML = '<i class="bi bi-camera-video-off-fill"></i> Выключить камеру';
+                localPlaceholder.classList.add("is-hidden");
             } else {
-                cameraStream.getVideoTracks().forEach(track => { combinedStream.removeTrack(track); track.stop(); });
-                cameraStream = null; localVideo.srcObject = combinedStream;
-                cameraButton.innerHTML = '<i class="bi bi-camera-video-fill"></i> Включить камеру'; localPlaceholder.classList.remove("is-hidden");
+                await videoTransceiver.sender.replaceTrack(null);   // sender остаётся, дорожка снимается
+                localPreview.removeTrack(cameraTrack);
+                cameraTrack.stop();
+                cameraTrack = null;
+                cameraButton.innerHTML = '<i class="bi bi-camera-video-fill"></i> Включить камеру';
+                localPlaceholder.classList.remove("is-hidden");
             }
-        } catch (error) { console.error("Ошибка доступа к камере:", error); alert("Не удалось получить доступ к камере. Проверь разрешения браузера."); }
-        console.log(combinedStream.getTracks().map(track => ({kind:track.kind,enabled:track.enabled,readyState:track.readyState})));
+        } catch (error) {
+            console.error("Ошибка доступа к камере:", error);
+            alert("Не удалось получить доступ к камере. Проверь разрешения браузера.");
+        }
     });
 </script>
 </body>

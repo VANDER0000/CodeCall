@@ -88,6 +88,7 @@
     let callStarted = false;   // звонок начат (нами или собеседником)
 
     const peerConnection = new RTCPeerConnection({
+        iceTransportPolicy: "relay",
         // TODO: перевыпусти ключи Metered и не храни их в репозитории
         iceServers: [
             {

@@ -88,30 +88,29 @@
     let callStarted = false;   // звонок начат (нами или собеседником)
 
     const peerConnection = new RTCPeerConnection({
-        // TODO: перевыпусти ключи Metered и не храни их в репозитории
         iceServers: [
             {
-                urls: "stun:stun.relay.metered.ca:80",
+            urls: "stun:stun.relay.metered.ca:80",
             },
             {
-                urls: "turn:standard.relay.metered.ca:80",
-                username: "39bc8dc42a82c9d0afc1ecd7",
-                credential: "N8VPw4pM8LuIQDFa",
+            urls: "turn:standard.relay.metered.ca:80",
+            username: "722fa1be3d0933f172168f4c",
+            credential: "DwGqmni+gbp9VoQr",
             },
             {
-                urls: "turn:standard.relay.metered.ca:80?transport=tcp",
-                username: "39bc8dc42a82c9d0afc1ecd7",
-                credential: "N8VPw4pM8LuIQDFa",
+            urls: "turn:standard.relay.metered.ca:80?transport=tcp",
+            username: "722fa1be3d0933f172168f4c",
+            credential: "DwGqmni+gbp9VoQr",
             },
             {
-                urls: "turn:standard.relay.metered.ca:443",
-                username: "39bc8dc42a82c9d0afc1ecd7",
-                credential: "N8VPw4pM8LuIQDFa",
+            urls: "turn:standard.relay.metered.ca:443",
+            username: "722fa1be3d0933f172168f4c",
+            credential: "DwGqmni+gbp9VoQr",
             },
             {
-                urls: "turns:standard.relay.metered.ca:443?transport=tcp",
-                username: "39bc8dc42a82c9d0afc1ecd7",
-                credential: "N8VPw4pM8LuIQDFa",
+            urls: "turns:standard.relay.metered.ca:443?transport=tcp",
+            username: "722fa1be3d0933f172168f4c",
+            credential: "DwGqmni+gbp9VoQr",
             },
         ],
     });

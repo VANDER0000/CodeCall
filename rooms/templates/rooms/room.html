@@ -88,13 +88,10 @@
     let callStarted = false;   // звонок начат (нами или собеседником)
 
     const peerConnection = new RTCPeerConnection({
+        // TODO: перевыпусти ключи Metered и не храни их в репозитории
         iceServers: [
-            { 
-                urls: "stun:stun.l.google.com:19302" 
-            },
-            {
-                 urls: "stun:stun.cloudflare.com:3478" 
-            },
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun.cloudflare.com:3478" },
             {
                 urls: "stun:stun.relay.metered.ca:80",
             },
@@ -267,17 +264,25 @@
     }
 
     // ---------- Видео собеседника ----------
+    let remoteCameraMuted = false;
+
+    function syncRemotePlaceholder() {
+        // Плейсхолдер скрываем только когда в элементе реально есть кадры (videoWidth > 0)
+        const hasFrames = remoteVideo.videoWidth > 0 && !remoteCameraMuted;
+        remotePlaceholder.classList.toggle("is-hidden", hasFrames);
+    }
+    ["loadedmetadata", "playing", "resize"].forEach(name => remoteVideo.addEventListener(name, syncRemotePlaceholder));
+
     peerConnection.ontrack = ({ track }) => {
-        remoteStream.addTrack(track);
-        if (remoteVideo.srcObject !== remoteStream) remoteVideo.srcObject = remoteStream;
         console.log("Получена дорожка собеседника:", track.kind);
+        remoteStream.addTrack(track);
+        // Новый MediaStream при каждой дорожке: так элемент гарантированно подхватит и звук, и видео
+        remoteVideo.srcObject = new MediaStream(remoteStream.getTracks());
+        remoteVideo.play().catch(error => console.warn("Автовоспроизведение заблокировано:", error));
 
         if (track.kind === "video") {
-            // Пока кадры не идут (или собеседник выключил камеру), дорожка в состоянии muted
-            const syncPlaceholder = () => remotePlaceholder.classList.toggle("is-hidden", track.muted);
-            track.onmute = syncPlaceholder;
-            track.onunmute = syncPlaceholder;
-            syncPlaceholder();
+            track.onmute = () => { remoteCameraMuted = true; syncRemotePlaceholder(); };
+            track.onunmute = () => { remoteCameraMuted = false; syncRemotePlaceholder(); };
         }
     };
 
